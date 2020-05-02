@@ -2,9 +2,9 @@ import numpy as np
 import serial
 import time
 
-name = {"little star", "little bee", "do"}
+name = ["little star", "little bee", "do"]
 waitTime = 0.1
-little_star = {42, 
+little_star = [42, 
   261, 261, 392, 392, 440, 440, 392,
   349, 349, 330, 330, 294, 294, 261,
   392, 392, 349, 349, 330, 330, 294,
@@ -16,8 +16,8 @@ little_star = {42,
   1, 1, 1, 1, 1, 1, 2,
   1, 1, 1, 1, 1, 1, 2,
   1, 1, 1, 1, 1, 1, 2,
-  1, 1, 1, 1, 1, 1, 2}
-little_bee = {49, 
+  1, 1, 1, 1, 1, 1, 2]
+little_bee = [49, 
     392, 330, 330, 349, 294, 294,
     261, 294, 330, 349, 392, 392, 392,
     392, 330, 330, 349, 294, 294,
@@ -34,11 +34,11 @@ little_bee = {49,
     1, 1, 1, 1, 1, 1, 2, 
     1, 1, 2, 1, 1, 2, 
     1, 1, 1, 1, 4
-}
-doo = {1,
+]
+doo = [1,
   261,
   5
-}
+]
 
 # output formatter
 formatter = lambda x: "%5d" % x
@@ -66,4 +66,4 @@ while (True):
     for data in doo:
       s.write(bytes(formatter(data), 'UTF-8'))
       time.sleep(waitTime)
-  print("Signal sended\n-------------\n")
+  print("Signal sended\n\n---------------------------\n")
