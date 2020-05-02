@@ -106,7 +106,7 @@ void song_selection(void)
     if (pc.readable()) {
       serialInBuffer[serialCount] = pc.getc();
       serialCount++;
-      if (serialCount == 3) {
+      if (serialCount == 5) {
         serialInBuffer[serialCount] = '\0';
         length = (int)atoi(serialInBuffer);
         serialCount = 0;
@@ -128,10 +128,14 @@ void song_selection(void)
   }
   j = 0;
   while (j < length) {
-    if (pc.readable()) {
-      noteLength[j] = pc.getc() - '0';
-      j++;
-    }
+    serialInBuffer[serialCount] = pc.getc();
+      serialCount++;
+      if (serialCount == 5) {
+        serialInBuffer[serialCount] = '\0';
+        noteLength[j] = (int)atoi(serialInBuffer);
+        serialCount = 0;
+        j++;
+      }
   }
 }
 
@@ -163,6 +167,7 @@ void play_song(void)
     }
     j++;
     if (j == length) {
+      wait(1.0);
       j = 0;
     }
   } 
@@ -211,6 +216,7 @@ void display(void)
       uLCD.locate(1, 2);
       uLCD.printf("%s", name[songs - 1]);
     }
+    wait(0.1);
   }
 }
 
