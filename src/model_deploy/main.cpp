@@ -44,7 +44,7 @@ int gesture;
 int enterrr = 0;
 int index_note;
 int len_note;
-
+bool play = false;
 
 // Create an area of memory to use for input, output, and intermediate arrays.
 // The size of this will depend on the model you're using, and may need to be
@@ -72,46 +72,50 @@ TfLiteStatus setup_status = SetupAccelerometer(error_reporter);
 bool should_clear_buffer = false;
 
 // play note
-void playNote(void)
+// void playNote(void)
+// {
+//   for (int i = 0; i < kAudioTxBufferSize; i++)
+//   {
+//     waveform[i] = (int16_t) (sin((double)i * 2. * M_PI/(double) (kAudioSampleFrequency / song[index_note])) * ((1<<16) - 1));
+//   }
+//   // the loop below will play the note for the duration of 1s
+//   for(int j = 0; j < kAudioSampleFrequency / kAudioTxBufferSize; ++j)
+//   {
+//     audio.spk.play(waveform, kAudioTxBufferSize);
+//   }
+//   len_note--;
+//   if (len_note == 0) {
+//     index_note++;
+//     index_note %= length;
+//     len_note = noteLength[index_note];
+//   }
+// }
+void playNote(int freq)
 {
   for (int i = 0; i < kAudioTxBufferSize; i++)
   {
-    waveform[i] = (int16_t) (sin((double)i * 2. * M_PI/(double) (kAudioSampleFrequency / song[index_note])) * ((1<<16) - 1));
+    waveform[i] = (int16_t) (sin((double)i * 2. * M_PI/(double) (kAudioSampleFrequency / freq)) * ((1<<16) - 1));
   }
-  // the loop below will play the note for the duration of 1s
-  for(int j = 0; j < kAudioSampleFrequency / kAudioTxBufferSize; ++j)
-  {
-    audio.spk.play(waveform, kAudioTxBufferSize);
-  }
-  len_note--;
-  if (len_note == 0) {
-    index_note++;
-    index_note %= length;
-    len_note = noteLength[index_note];
-  }
+  // the loop below will play the note for the duration of 1s 
+  audio.spk.play(waveform, kAudioTxBufferSize);
 }
 
 // play song and stop song
 void play_song(void)
 {
-  // int i = 0, j = 0;
-  
-  // while (true) {
-  //   i = noteLength[j];
-  //   while (i > 0) {
-  //     playNote(song[j]);
-  //     uLCD.locate(0, 1);
-  //     uLCD.printf("play %2d", j);
-  //     wait(1.0);
-  //     i--;
-  //   }
-  //   j++;
-  //   if (j == length) {
-  //     wait(1.0);
-  //     j = 0;
-  //   }
-  // }
-
+  int i;
+  while (play) {
+    for (i = 0; play && i < length; i++) {
+      int j = noteLength[i];
+      while (play && j--) {
+        for (int k = 0; k < kAudioSampleFrequency / kAudioTxBufferSize; k++) {
+          song_queue.call(playNote, song[i]);
+        }
+        if (j >= 0) wait(1.0);
+      }
+    }
+    wait(1.0);
+  }
 }
 
 // Return the result of the last prediction
@@ -279,7 +283,6 @@ void song_selection(void)
   serialCount = 0;
   show = 3;
   display();
-  
   pc.printf("%d\r\n", songs);
   while (!finish) {
     if (pc.readable()) {
@@ -321,9 +324,14 @@ void song_selection(void)
 
 void stop_play_song(void)
 {
-  if (idC != 0) {
-    queue.cancel(idC);
+  // queue.cancel(idC);
+  play = false;
+  for (int i = 0; i < kAudioTxBufferSize; i++)
+  {
+    waveform[i] = (int16_t) 0;
   }
+  // the loop below will play the note for the duration of 1s 
+  audio.spk.play(waveform, kAudioTxBufferSize);
 }
 
 // mode selection
@@ -351,13 +359,14 @@ void mode_selection(void)
     wait(0.1);
   }
   song_selection();
-  index_note = 0;
-  len_note = noteLength[index_note];
+  // index_note = 0;
+  // len_note = noteLength[index_note];
   // while (finish) {
-  idC = queue.call_every(1000, playNote);
+  // idC = queue.call_every(1000, playNote);
     // wait(1.0);
   // }
-  // song_queue.call(play_song);
+  play = true;
+  play_song();
 }
 
 // when select is pressed
@@ -368,11 +377,11 @@ int main(int argc, char* argv[]) {
   modes = 1;
   songs = 1;
   t.start(callback(&queue, &EventQueue::dispatch_forever));
-  // song_t.start(callback(&song_queue, &EventQueue::dispatch_forever));
+  song_t.start(callback(&song_queue, &EventQueue::dispatch_forever));
   // disp_t.start(callback(&disp_queue, &EventQueue::dispatch_forever));
   // disp_queue.call(get_gest);
   pause.rise(queue.event(mode_selection));
-  pause.fall(queue.event(stop_play_song));
+  pause.fall(song_queue.event(stop_play_song));
   button.fall(&button_press);
   display();
   
@@ -389,40 +398,40 @@ int main(int argc, char* argv[]) {
   // An easier approach is to just use the AllOpsResolver, but this will
   // incur some penalty in code space for op implementations that are not
   // needed by this graph.
-    micro_op_resolver.AddBuiltin(
-        tflite::BuiltinOperator_DEPTHWISE_CONV_2D,
-        tflite::ops::micro::Register_DEPTHWISE_CONV_2D());
-    micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_MAX_POOL_2D,
-                                tflite::ops::micro::Register_MAX_POOL_2D());
-    micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_CONV_2D,
-                                tflite::ops::micro::Register_CONV_2D());
-    micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_FULLY_CONNECTED,
-                                tflite::ops::micro::Register_FULLY_CONNECTED());
-    micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_SOFTMAX,
-                                tflite::ops::micro::Register_SOFTMAX());
-    micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_RESHAPE,
-                                tflite::ops::micro::Register_RESHAPE(), 1);
+  micro_op_resolver.AddBuiltin(
+      tflite::BuiltinOperator_DEPTHWISE_CONV_2D,
+      tflite::ops::micro::Register_DEPTHWISE_CONV_2D());
+  micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_MAX_POOL_2D,
+                              tflite::ops::micro::Register_MAX_POOL_2D());
+  micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_CONV_2D,
+                              tflite::ops::micro::Register_CONV_2D());
+  micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_FULLY_CONNECTED,
+                              tflite::ops::micro::Register_FULLY_CONNECTED());
+  micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_SOFTMAX,
+                              tflite::ops::micro::Register_SOFTMAX());
+  micro_op_resolver.AddBuiltin(tflite::BuiltinOperator_RESHAPE,
+                              tflite::ops::micro::Register_RESHAPE(), 1);
 
  // Allocate memory from the tensor_arena for the model's tensors
 interpreter->AllocateTensors();
 
 model_input = interpreter->input(0);
   
-  if ((model_input->dims->size != 4) || (model_input->dims->data[0] != 1) ||
-      (model_input->dims->data[1] != config.seq_length) ||
-      (model_input->dims->data[2] != kChannelNumber) ||
-      (model_input->type != kTfLiteFloat32)) {
-    error_reporter->Report("Bad input tensor parameters in model");
-    return -1;
-  }
+if ((model_input->dims->size != 4) || (model_input->dims->data[0] != 1) ||
+    (model_input->dims->data[1] != config.seq_length) ||
+    (model_input->dims->data[2] != kChannelNumber) ||
+    (model_input->type != kTfLiteFloat32)) {
+  error_reporter->Report("Bad input tensor parameters in model");
+  return -1;
+}
 
-  input_length = model_input->bytes / sizeof(float);
+input_length = model_input->bytes / sizeof(float);
 
-  
-  if (setup_status != kTfLiteOk) {
-    error_reporter->Report("Set up failed\n");
-    return -1;
-  }
-  // error_reporter->Report("Set up successful...\n");
+
+if (setup_status != kTfLiteOk) {
+  error_reporter->Report("Set up failed\n");
+  return -1;
+}
+// error_reporter->Report("Set up successful...\n");
 
 }
