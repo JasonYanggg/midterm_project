@@ -25,9 +25,11 @@ int songs;
 char name[3][20] = {"little star", "little bee", "happy birthday"};
 Thread t;
 Thread song_t;
+Thread note_t;
 // Thread disp_t;
 EventQueue queue(32 * EVENTS_EVENT_SIZE);
 EventQueue song_queue(32 * EVENTS_EVENT_SIZE);
+EventQueue note_queue(32 * EVENTS_EVENT_SIZE);
 // EventQueue disp_queue(32 * EVENTS_EVENT_SIZE);
 InterruptIn pause(SW2);
 // DigitalIn pause(SW2);
@@ -38,6 +40,7 @@ Serial pc(USBTX, USBRX);
 int length;
 int song[100];
 int noteLength[100];
+int map[100];
 int finish = 0;
 char serialInBuffer[bufferLength];
 int serialCount = 0;
@@ -47,6 +50,8 @@ int index_note;
 int len_note;
 bool play = false;
 int score = 0;
+int x1, x2;
+bool gameover = false;
 
 // Create an area of memory to use for input, output, and intermediate arrays.
 // The size of this will depend on the model you're using, and may need to be
@@ -92,9 +97,9 @@ void play_song(void)
       int j = noteLength[i];
       while (play && j--) {
         for (int k = 0; k < kAudioSampleFrequency / kAudioTxBufferSize; k++) {
-          song_queue.call(playNote, song[i]);
+          note_queue.call(playNote, song[i]);
         }
-        if (j >= 0) wait(1.0);
+        if (j >= 0) wait(0.91);
       }
     }
     wait(1.0);
@@ -244,9 +249,6 @@ void display(int x)
         uLCD.line(5, 80, 20, 95, 0xA52A2A);
         uLCD.line(5, 45, 25, 45, 0xA52A2A);
         uLCD.line(5, 95, 25, 95, 0xA52A2A);
-        // uLCD.text_width(1);
-        // uLCD.text_height(1);
-        // uLCD.locate(4, 12);
         uLCD.text_width(4);
         uLCD.text_height(4);
         uLCD.locate(1, 3);
@@ -355,6 +357,17 @@ void song_selection(void)
         j++;
       }
   }
+  j = 0;
+  while (j < length) {
+    serialInBuffer[serialCount] = pc.getc();
+      serialCount++;
+      if (serialCount == 5) {
+        serialInBuffer[serialCount] = '\0';
+        map[j] = ((int)atoi(serialInBuffer) == 0) ? 0xDC143C : 0x800080;
+        serialCount = 0;
+        j++;
+      }
+  }
   if (modes == 4)
     show = 4;
   display(-1);
@@ -371,6 +384,84 @@ void stop_play_song(void)
   // the loop below will play the note for the duration of 1s 
   audio.spk.play(waveform, kAudioTxBufferSize);
 }
+
+// when select is pressed
+void button_press(void)
+{
+  if (debounce.read_ms() > 1000) {
+    finish = !finish;
+    gameover = !gameover;
+    play = !play;
+    stop_play_song();
+    debounce.reset();
+  }
+}
+
+void score_system(void)
+{
+
+}
+
+void taiko_game(void)
+{
+  int i;  // loop index
+
+  // down counting before start
+  uLCD.text_width(3);
+  uLCD.text_height(3);
+  uLCD.color(RED);
+  for (i = 3; i > 0; i--) {
+    uLCD.locate(3, 2); 
+    uLCD.printf("%d", i);
+    wait(1.0);
+  }
+  uLCD.locate(3, 2);
+  uLCD.printf(" ");
+
+  i = 0;
+  x1 = 136;
+  x2 = x1 + 60 * noteLength[0];
+  finish = false;
+  gameover = false;
+  song_queue.call_in(1600, play_song);
+  while (!finish) {
+    uLCD.filled_circle(x1, 70, 8, map[i]);
+    uLCD.filled_circle(x2, 70, 8, map[i + 1]);
+    wait(0.1);
+    uLCD.filled_circle(x1, 70, 8, BLACK);
+    uLCD.filled_circle(x2, 70, 8, BLACK);
+    uLCD.circle(40, 70, 9, 0x696969);
+    x1 -= 12;
+    x2 -= 12;
+    if (x1 == 28) {
+      i++;
+      if (i < length - 1) {
+        x1 = x2;
+        x2 = x1 + 60 * noteLength[i];
+      }
+      else {
+        x1 = x2;
+        finish = true;
+      }
+    }
+  }
+  while (!gameover) {
+    uLCD.filled_circle(x1, 70, 8, map[i]);
+    wait(0.1);
+    uLCD.filled_circle(x1, 70, 8, BLACK);
+    uLCD.circle(40, 70, 9, 0x696969);
+    x1 -= 12;
+    if (x1 == 28) {
+      gameover = true;
+      break;
+    }
+  }
+  wait(0.9);
+  stop_play_song();
+  wait(0.2);
+  button_press();
+}
+
 
 // mode selection
 void mode_selection(void)
@@ -398,28 +489,26 @@ void mode_selection(void)
   }
   song_selection();
   play = true;
-  play_song();
-}
-
-// when select is pressed
-void button_press(void)
-{
-  if (debounce.read_ms() > 1000) {
-    finish = !finish;
-    debounce.reset();
+  if (modes == 4) {
+    taiko_game();
+  }
+  else {
+    song_queue.call(play_song);
+    // play_song();
   }
 }
 
 int main(int argc, char* argv[]) {
-  show = 4;
+  show = 0;
   modes = 1;
   songs = 1;
   t.start(callback(&queue, &EventQueue::dispatch_forever));
   song_t.start(callback(&song_queue, &EventQueue::dispatch_forever));
+  note_t.start(callback(&note_queue, &EventQueue::dispatch_forever));
   // disp_t.start(callback(&disp_queue, &EventQueue::dispatch_forever));
   // disp_queue.call(get_gest);
   pause.rise(queue.event(mode_selection));
-  pause.fall(song_queue.event(stop_play_song));
+  pause.fall(note_queue.event(stop_play_song));
   debounce.start();
   button.fall(&button_press);
   display(-1);
