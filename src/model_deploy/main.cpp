@@ -32,6 +32,7 @@ EventQueue song_queue(32 * EVENTS_EVENT_SIZE);
 InterruptIn pause(SW2);
 // DigitalIn pause(SW2);
 InterruptIn button(SW3);
+Timer debounce;
 int idC = 0;
 Serial pc(USBTX, USBRX);
 int length;
@@ -370,7 +371,13 @@ void mode_selection(void)
 }
 
 // when select is pressed
-void button_press(void) {finish = !finish;}
+void button_press(void)
+{
+  if (debounce.read_ms() > 1000) {
+    finish = !finish;
+    debounce.reset();
+  }
+}
 
 int main(int argc, char* argv[]) {
   show = 0;
@@ -382,6 +389,7 @@ int main(int argc, char* argv[]) {
   // disp_queue.call(get_gest);
   pause.rise(queue.event(mode_selection));
   pause.fall(song_queue.event(stop_play_song));
+  debounce.start();
   button.fall(&button_press);
   display();
   
