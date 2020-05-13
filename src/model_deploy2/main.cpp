@@ -26,10 +26,12 @@ char name[3][20] = {"little star", "little bee", "happy birthday"};
 Thread t;
 Thread song_t;
 Thread note_t;
+Thread game_t;
 // Thread disp_t;
 EventQueue queue(32 * EVENTS_EVENT_SIZE);
 EventQueue song_queue(32 * EVENTS_EVENT_SIZE);
 EventQueue note_queue(32 * EVENTS_EVENT_SIZE);
+EventQueue game_queue(32 * EVENTS_EVENT_SIZE);
 // EventQueue disp_queue(32 * EVENTS_EVENT_SIZE);
 InterruptIn pause(SW2);
 // DigitalIn pause(SW2);
@@ -52,6 +54,8 @@ bool play = false;
 int score = 0;
 int x1, x2;
 bool gameover = false;
+int indexxx;
+int good, normal, wrong;
 
 // Create an area of memory to use for input, output, and intermediate arrays.
 // The size of this will depend on the model you're using, and may need to be
@@ -99,7 +103,7 @@ void play_song(void)
         for (int k = 0; k < kAudioSampleFrequency / kAudioTxBufferSize; k++) {
           note_queue.call(playNote, song[i]);
         }
-        if (j >= 0) wait(0.91);
+        if (j >= 0) wait(1.09);
       }
     }
     wait(1.0);
@@ -247,20 +251,28 @@ void display(int x)
         uLCD.circle(40, 70, 9, 0x696969);
         uLCD.line(5, 60, 20, 45, 0xA52A2A);
         uLCD.line(5, 80, 20, 95, 0xA52A2A);
-        uLCD.line(5, 45, 25, 45, 0xA52A2A);
-        uLCD.line(5, 95, 25, 95, 0xA52A2A);
-        uLCD.text_width(4);
-        uLCD.text_height(4);
-        uLCD.locate(1, 3);
-        uLCD.color(RED);
-        uLCD.printf("%.3d", score);
-        uLCD.rectangle(25, 93, 113, 127, 0xFFFF00);
-        uLCD.filled_circle(50, 35, 8, 0xDC143C);
-        uLCD.circle(70, 35, 7, 0xDC143C);
-        uLCD.triangle(75, 33, 79, 33, 77, 37, 0xDC143C);
-        uLCD.filled_circle(95, 35, 8, 0x800080);
-        uLCD.circle(115, 35, 7, 0x800080);
-        uLCD.triangle(120, 37, 124, 37, 122, 33, 0x800080);
+        uLCD.filled_circle(50, 115, 8, 0xDC143C);
+        uLCD.circle(70, 115, 7, 0xDC143C);
+        uLCD.triangle(75, 113, 79, 113, 77, 117, 0xDC143C);
+        uLCD.filled_circle(95, 115, 8, 0x800080);
+        uLCD.circle(115, 115, 7, 0x800080);
+        uLCD.triangle(120, 117, 124, 117, 122, 113, 0x800080);
+    }
+    else if (show == 5) {
+      uLCD.color(BLUE);
+      uLCD.text_width(2);
+      uLCD.text_height(2);
+      uLCD.printf(" -Taiko- \n");
+      uLCD.line(0, 20, 130, 20, BLUE);
+      uLCD.text_width(1);
+      uLCD.text_height(1);
+      uLCD.printf("\n\n    good:\t%d\n\n    normal:\t%d\n\n    wrong:\t%d", good, normal, wrong);
+      uLCD.text_width(4);
+      uLCD.text_height(4);
+      uLCD.locate(1, 3);
+      uLCD.color(RED);
+      uLCD.printf("%.3d", score);
+      uLCD.rectangle(25, 93, 113, 127, 0xFFFF00);
     }
   }
   else {
@@ -399,7 +411,41 @@ void button_press(void)
 
 void score_system(void)
 {
-
+  // wait(1.6);
+  // while (!finish) {
+    gesture = 0;
+    get_gest();
+    if (x1 <= 52) {
+      if (gesture == 1 && map[indexxx] == 0xDC143C) {
+        score += 10;
+        good++;
+      }
+      else if (gesture == 2 && map[indexxx] == 0x800080) {
+        score += 10;
+        good++;
+      }
+      else {
+        wrong++;
+      }
+    }
+    else if (x1 <= 76) {
+      if (gesture == 1 && map[indexxx] == 0xDC143C) {
+        score += 5;
+        normal++;
+      }
+      else if (gesture == 2 && map[indexxx] == 0x800080) {
+        score += 5;
+        normal++;
+      }
+      else {
+        wrong++;
+      }
+    }
+    else {
+      wrong++;
+    }
+  //   wait(0.5);
+  // }
 }
 
 void taiko_game(void)
@@ -407,59 +453,66 @@ void taiko_game(void)
   int i;  // loop index
 
   // down counting before start
-  uLCD.text_width(3);
-  uLCD.text_height(3);
+  good = 0;
+  normal = 0;
+  wrong = 0;
+  score = 0;
+  uLCD.text_width(4);
+  uLCD.text_height(4);
   uLCD.color(RED);
   for (i = 3; i > 0; i--) {
-    uLCD.locate(3, 2); 
+    uLCD.locate(2, 2); 
     uLCD.printf("%d", i);
     wait(1.0);
   }
-  uLCD.locate(3, 2);
+  uLCD.locate(2, 2);
   uLCD.printf(" ");
 
-  i = 0;
+  indexxx = 0;
   x1 = 136;
   x2 = x1 + 60 * noteLength[0];
   finish = false;
   gameover = false;
+  game_queue.call(score_system);
   song_queue.call_in(1600, play_song);
-  while (!finish) {
-    uLCD.filled_circle(x1, 70, 8, map[i]);
-    uLCD.filled_circle(x2, 70, 8, map[i + 1]);
-    wait(0.1);
+  while (!gameover) {
+    uLCD.filled_circle(x1, 70, 8, map[indexxx]);
+    uLCD.filled_circle(x2, 70, 8, map[indexxx + 1]);
+    wait(0.085);
     uLCD.filled_circle(x1, 70, 8, BLACK);
     uLCD.filled_circle(x2, 70, 8, BLACK);
     uLCD.circle(40, 70, 9, 0x696969);
     x1 -= 12;
     x2 -= 12;
     if (x1 == 28) {
-      i++;
-      if (i < length - 1) {
+      indexxx++;
+      if (indexxx < length - 1) {
         x1 = x2;
-        x2 = x1 + 60 * noteLength[i];
+        x2 = x1 + 60 * noteLength[indexxx];
       }
       else {
         x1 = x2;
-        finish = true;
+        gameover = true;
       }
+      game_queue.call(score_system);
     }
   }
-  while (!gameover) {
-    uLCD.filled_circle(x1, 70, 8, map[i]);
-    wait(0.1);
+  while (!finish) {
+    uLCD.filled_circle(x1, 70, 8, map[indexxx]);
+    wait(0.085);
     uLCD.filled_circle(x1, 70, 8, BLACK);
+    uLCD.filled_circle(0, 70, 20, WHITE);
     uLCD.circle(40, 70, 9, 0x696969);
     x1 -= 12;
     if (x1 == 28) {
-      gameover = true;
+      finish = true;
       break;
     }
   }
-  wait(0.9);
-  stop_play_song();
-  wait(0.2);
-  button_press();
+  wait(1.0);
+  note_queue.call(stop_play_song);
+  show = 5;
+  display(-1);
 }
 
 
@@ -505,6 +558,7 @@ int main(int argc, char* argv[]) {
   t.start(callback(&queue, &EventQueue::dispatch_forever));
   song_t.start(callback(&song_queue, &EventQueue::dispatch_forever));
   note_t.start(callback(&note_queue, &EventQueue::dispatch_forever));
+  game_t.start(callback(&game_queue, &EventQueue::dispatch_forever));
   // disp_t.start(callback(&disp_queue, &EventQueue::dispatch_forever));
   // disp_queue.call(get_gest);
   pause.rise(queue.event(mode_selection));
