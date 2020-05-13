@@ -22,12 +22,16 @@ uLCD_4DGL uLCD(D1, D0, D2);
 int show;
 int modes;
 int songs;
-char name[3][20] = {"little star", "little bee", "do"};
+char name[3][20] = {"little star", "little bee", "happy birthday"};
 Thread t;
 Thread song_t;
+Thread note_t;
+Thread game_t;
 // Thread disp_t;
 EventQueue queue(32 * EVENTS_EVENT_SIZE);
 EventQueue song_queue(32 * EVENTS_EVENT_SIZE);
+EventQueue note_queue(32 * EVENTS_EVENT_SIZE);
+EventQueue game_queue(32 * EVENTS_EVENT_SIZE);
 // EventQueue disp_queue(32 * EVENTS_EVENT_SIZE);
 InterruptIn pause(SW2);
 // DigitalIn pause(SW2);
@@ -38,6 +42,7 @@ Serial pc(USBTX, USBRX);
 int length;
 int song[100];
 int noteLength[100];
+int map[100];
 int finish = 0;
 char serialInBuffer[bufferLength];
 int serialCount = 0;
@@ -46,6 +51,11 @@ int enterrr = 0;
 int index_note;
 int len_note;
 bool play = false;
+int score = 0;
+int x1, x2;
+bool gameover = false;
+int indexxx;
+int good, normal, wrong;
 
 // Create an area of memory to use for input, output, and intermediate arrays.
 // The size of this will depend on the model you're using, and may need to be
@@ -72,25 +82,6 @@ TfLiteStatus setup_status = SetupAccelerometer(error_reporter);
 // Whether we should clear the buffer next time we fetch data
 bool should_clear_buffer = false;
 
-// play note
-// void playNote(void)
-// {
-//   for (int i = 0; i < kAudioTxBufferSize; i++)
-//   {
-//     waveform[i] = (int16_t) (sin((double)i * 2. * M_PI/(double) (kAudioSampleFrequency / song[index_note])) * ((1<<16) - 1));
-//   }
-//   // the loop below will play the note for the duration of 1s
-//   for(int j = 0; j < kAudioSampleFrequency / kAudioTxBufferSize; ++j)
-//   {
-//     audio.spk.play(waveform, kAudioTxBufferSize);
-//   }
-//   len_note--;
-//   if (len_note == 0) {
-//     index_note++;
-//     index_note %= length;
-//     len_note = noteLength[index_note];
-//   }
-// }
 void playNote(int freq)
 {
   for (int i = 0; i < kAudioTxBufferSize; i++)
@@ -110,9 +101,9 @@ void play_song(void)
       int j = noteLength[i];
       while (play && j--) {
         for (int k = 0; k < kAudioSampleFrequency / kAudioTxBufferSize; k++) {
-          song_queue.call(playNote, song[i]);
+          note_queue.call(playNote, song[i]);
         }
-        if (j >= 0) wait(1.0);
+        if (j >= 0) wait(1.09);
       }
     }
     wait(1.0);
@@ -199,44 +190,102 @@ void get_gest(void)
   }
 }
 
-void display(void)
+void display(int x)
 {
-  uLCD.cls();
-  if (show == 0) {
-    uLCD.color(BLUE);
-    uLCD.printf("User manual\n\n");
-    uLCD.printf("1. Press SW2 to \n  select mode\n\n");
-    uLCD.printf("2. Move clockwise\n  to scroll down\n\n");
-    uLCD.printf("3. Move counter \n  clockwise to\n  scroll up\n\n");
-    uLCD.printf("4. Press SW3 to \n  to select");
-  }
-  else if (show == 1) {
-    uLCD.color(BLUE);
-    uLCD.printf("\n  forward\n");
-    uLCD.printf("\n  backward\n");
-    uLCD.printf("\n  change songs\n");
-    uLCD.locate(0, 2 * modes - 1);
-    uLCD.printf(">");
-  }
-  else if (show == 2) {
-    uLCD.color(BLUE);
-    uLCD.printf("\n  %s\n", name[0]);
-    uLCD.printf("\n  %s\n", name[1]);
-    uLCD.printf("\n  %s\n", name[2]);
-    uLCD.locate(0, 2 * songs - 1);
-    uLCD.printf(">");
-  }
-  else if (show == 3) {
-    uLCD.circle(64, 50, 40, WHITE);
-    uLCD.triangle(45, 25, 45, 75, 95, 50, WHITE);
-    uLCD.color(BLUE);
-    uLCD.locate(0, 13);
-    if (!finish) {
-      uLCD.printf("Loading:\n  %s", name[songs - 1]);
+  if (x == -1) {
+    uLCD.cls();
+    if (show == 0) {
+      uLCD.color(BLUE);
+      uLCD.text_width(1);
+      uLCD.text_height(1);
+      uLCD.printf("User manual\n\n");
+      uLCD.printf("1. Press SW2 to \n  select mode\n\n");
+      uLCD.printf("2. Move clockwise\n  to scroll down\n\n");
+      uLCD.printf("3. Move counter \n  clockwise to\n  scroll up\n\n");
+      uLCD.printf("4. Press SW3 to \n  to select");
     }
-    else {
-      uLCD.printf("Now playing:\n  %s", name[songs - 1]);  
+    else if (show == 1) {
+      uLCD.color(BLUE);
+      uLCD.text_width(1);
+      uLCD.text_height(1);
+      uLCD.printf("\n  forward\n");
+      uLCD.printf("\n  backward\n");
+      uLCD.printf("\n  change songs\n");
+      uLCD.printf("\n  Taiko game\n");
+      uLCD.locate(0, 2 * modes - 1);
+      uLCD.printf(">");
     }
+    else if (show == 2) {
+      uLCD.color(BLUE);
+      uLCD.text_width(1);
+      uLCD.text_height(1);
+      uLCD.printf("\n  %s\n", name[0]);
+      uLCD.printf("\n  %s\n", name[1]);
+      uLCD.printf("\n  %s\n", name[2]);
+      uLCD.locate(0, 2 * songs - 1);
+      uLCD.printf(">");
+    }
+    else if (show == 3) {
+      uLCD.color(BLUE);
+      uLCD.text_width(1);
+      uLCD.text_height(1);
+      uLCD.circle(64, 50, 40, WHITE);
+      uLCD.triangle(45, 25, 45, 75, 95, 50, WHITE);
+      uLCD.color(BLUE);
+      uLCD.locate(0, 13);
+      if (!finish) {
+        uLCD.printf("Loading:\n  %s", name[songs - 1]);
+      }
+      else {
+        uLCD.printf("Now playing:\n  %s", name[songs - 1]);  
+      }
+    }
+    else if (show == 4) {
+        uLCD.color(BLUE);
+        uLCD.text_width(2);
+        uLCD.text_height(2);
+        uLCD.printf(" -Taiko- \n");
+        uLCD.line(0, 20, 130, 20, BLUE);
+        uLCD.filled_circle(0, 70, 20, WHITE);
+        uLCD.circle(0, 70, 16, 0xFF7F50);
+        uLCD.circle(40, 70, 9, 0x696969);
+        uLCD.line(5, 60, 20, 45, 0xA52A2A);
+        uLCD.line(5, 80, 20, 95, 0xA52A2A);
+        uLCD.filled_circle(50, 115, 8, 0xDC143C);
+        uLCD.circle(70, 115, 7, 0xDC143C);
+        uLCD.triangle(75, 113, 79, 113, 77, 117, 0xDC143C);
+        uLCD.filled_circle(95, 115, 8, 0x800080);
+        uLCD.circle(115, 115, 7, 0x800080);
+        uLCD.triangle(120, 117, 124, 117, 122, 113, 0x800080);
+    }
+    else if (show == 5) {
+      uLCD.color(BLUE);
+      uLCD.text_width(2);
+      uLCD.text_height(2);
+      uLCD.printf(" -Taiko- \n");
+      uLCD.line(0, 20, 130, 20, BLUE);
+      uLCD.text_width(1);
+      uLCD.text_height(1);
+      uLCD.printf("\n\n    good:\t%d\n\n    normal:\t%d\n\n    wrong:\t%d", good, normal, wrong);
+      uLCD.text_width(4);
+      uLCD.text_height(4);
+      uLCD.locate(1, 3);
+      uLCD.color(RED);
+      uLCD.printf("%.3d", score);
+      uLCD.rectangle(25, 93, 113, 127, 0xFFFF00);
+    }
+  }
+  else {
+    uLCD.locate(0, 1);
+    uLCD.printf(" ");
+    uLCD.locate(0, 3);
+    uLCD.printf(" ");
+    uLCD.locate(0, 5);
+    uLCD.printf(" ");
+    uLCD.locate(0, 7);
+    uLCD.printf(" ");
+    uLCD.locate(0, 2 * x - 1);
+    uLCD.printf(">");
   }
 }
 // song selection
@@ -257,23 +306,23 @@ void song_selection(void)
       songs = N;
     }
   }
-  else if (modes == 3) {
+  else if (modes == 3 || modes == 4) {
     finish = 0;
     show = 2;
-    display();
+    display(-1);
     while (!finish) {
       gesture = 0;
       get_gest();
       if (gesture == 1) {
         if (songs < N) {
           songs++;
-          display();
+          display(songs);
         }
       }
       else if (gesture == 2) {
         if (songs > 1) {
           songs--;
-          display();
+          display(songs);
         }
       }
     }
@@ -283,7 +332,7 @@ void song_selection(void)
   finish = 0;
   serialCount = 0;
   show = 3;
-  display();
+  display(-1);
   pc.printf("%d\r\n", songs);
   while (!finish) {
     if (pc.readable()) {
@@ -320,7 +369,20 @@ void song_selection(void)
         j++;
       }
   }
-  display();
+  j = 0;
+  while (j < length) {
+    serialInBuffer[serialCount] = pc.getc();
+      serialCount++;
+      if (serialCount == 5) {
+        serialInBuffer[serialCount] = '\0';
+        map[j] = ((int)atoi(serialInBuffer) == 0) ? 0xDC143C : 0x800080;
+        serialCount = 0;
+        j++;
+      }
+  }
+  if (modes == 4)
+    show = 4;
+  display(-1);
 }
 
 void stop_play_song(void)
@@ -335,47 +397,157 @@ void stop_play_song(void)
   audio.spk.play(waveform, kAudioTxBufferSize);
 }
 
+// when select is pressed
+void button_press(void)
+{
+  if (debounce.read_ms() > 1000) {
+    finish = !finish;
+    gameover = !gameover;
+    play = !play;
+    stop_play_song();
+    debounce.reset();
+  }
+}
+
+void score_system(void)
+{
+  // wait(1.6);
+  // while (!finish) {
+    gesture = 0;
+    get_gest();
+    if (x1 <= 52) {
+      if (gesture == 1 && map[indexxx] == 0xDC143C) {
+        score += 10;
+        good++;
+      }
+      else if (gesture == 2 && map[indexxx] == 0x800080) {
+        score += 10;
+        good++;
+      }
+      else {
+        wrong++;
+      }
+    }
+    else if (x1 <= 76) {
+      if (gesture == 1 && map[indexxx] == 0xDC143C) {
+        score += 5;
+        normal++;
+      }
+      else if (gesture == 2 && map[indexxx] == 0x800080) {
+        score += 5;
+        normal++;
+      }
+      else {
+        wrong++;
+      }
+    }
+    else {
+      wrong++;
+    }
+  //   wait(0.5);
+  // }
+}
+
+void taiko_game(void)
+{
+  int i;  // loop index
+
+  // down counting before start
+  good = 0;
+  normal = 0;
+  wrong = 0;
+  score = 0;
+  uLCD.text_width(4);
+  uLCD.text_height(4);
+  uLCD.color(RED);
+  for (i = 3; i > 0; i--) {
+    uLCD.locate(2, 2); 
+    uLCD.printf("%d", i);
+    wait(1.0);
+  }
+  uLCD.locate(2, 2);
+  uLCD.printf(" ");
+
+  indexxx = 0;
+  x1 = 136;
+  x2 = x1 + 60 * noteLength[0];
+  finish = false;
+  gameover = false;
+  game_queue.call(score_system);
+  song_queue.call_in(1600, play_song);
+  while (!gameover) {
+    uLCD.filled_circle(x1, 70, 8, map[indexxx]);
+    uLCD.filled_circle(x2, 70, 8, map[indexxx + 1]);
+    wait(0.085);
+    uLCD.filled_circle(x1, 70, 8, BLACK);
+    uLCD.filled_circle(x2, 70, 8, BLACK);
+    uLCD.circle(40, 70, 9, 0x696969);
+    x1 -= 12;
+    x2 -= 12;
+    if (x1 == 28) {
+      indexxx++;
+      if (indexxx < length - 1) {
+        x1 = x2;
+        x2 = x1 + 60 * noteLength[indexxx];
+      }
+      else {
+        x1 = x2;
+        gameover = true;
+      }
+      game_queue.call(score_system);
+    }
+  }
+  while (!finish) {
+    uLCD.filled_circle(x1, 70, 8, map[indexxx]);
+    wait(0.085);
+    uLCD.filled_circle(x1, 70, 8, BLACK);
+    uLCD.filled_circle(0, 70, 20, WHITE);
+    uLCD.circle(40, 70, 9, 0x696969);
+    x1 -= 12;
+    if (x1 == 28) {
+      finish = true;
+      break;
+    }
+  }
+  wait(1.0);
+  note_queue.call(stop_play_song);
+  show = 5;
+  display(-1);
+}
+
+
 // mode selection
 void mode_selection(void)
 {
   modes = 1;
   finish = 0;
   show = 1;
-  display();
+  display(-1);
   while (!finish) {
     gesture = 0;
     get_gest();
-    if (gesture == 2) {
-      if (modes < 3) {
+    if (gesture == 1) {
+      if (modes < 4) {
         modes++;
-        display();
+        display(modes);
       }
     }
-    else if (gesture == 1) {
+    else if (gesture == 2) {
       if (modes > 1) {
         modes--;
-        display();
+        display(modes);
       }
     }
     wait(0.1);
   }
   song_selection();
-  // index_note = 0;
-  // len_note = noteLength[index_note];
-  // while (finish) {
-  // idC = queue.call_every(1000, playNote);
-    // wait(1.0);
-  // }
   play = true;
-  play_song();
-}
-
-// when select is pressed
-void button_press(void)
-{
-  if (debounce.read_ms() > 1000) {
-    finish = !finish;
-    debounce.reset();
+  if (modes == 4) {
+    taiko_game();
+  }
+  else {
+    song_queue.call(play_song);
+    // play_song();
   }
 }
 
@@ -385,13 +557,15 @@ int main(int argc, char* argv[]) {
   songs = 1;
   t.start(callback(&queue, &EventQueue::dispatch_forever));
   song_t.start(callback(&song_queue, &EventQueue::dispatch_forever));
+  note_t.start(callback(&note_queue, &EventQueue::dispatch_forever));
+  game_t.start(callback(&game_queue, &EventQueue::dispatch_forever));
   // disp_t.start(callback(&disp_queue, &EventQueue::dispatch_forever));
   // disp_queue.call(get_gest);
   pause.rise(queue.event(mode_selection));
-  pause.fall(song_queue.event(stop_play_song));
+  pause.fall(note_queue.event(stop_play_song));
   debounce.start();
   button.fall(&button_press);
-  display();
+  display(-1);
   
   if (model->version() != TFLITE_SCHEMA_VERSION) {
     error_reporter->Report(
